@@ -104,7 +104,7 @@ def _resolve_target_python(
             return mod_name, sym or None
         # try suffix match on dotted name
         for name in mods:
-            if name.endswith(mod_name) or name.endswith("." + mod_name):
+            if name.endswith("." + mod_name):
                 return name, sym or None
         raise SymbolNotFoundError(target)
     # bare symbol or module

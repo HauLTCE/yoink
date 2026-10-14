@@ -302,7 +302,7 @@ def _flat_generic(
     seen: set[str] = set()
     out: list[str] = []
     warnings = [
-        f"resolution: text — regex-based graph for {spec.id}, verify imports"
+        f"resolution: text - regex-based graph for {spec.id}, verify imports"
     ]
     for mod in order:
         info = graph.modules.get(mod)

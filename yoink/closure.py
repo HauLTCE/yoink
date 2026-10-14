@@ -460,11 +460,13 @@ def _generic_closure(
     unresolved: list[Unresolved] = list(graph.unresolved)
 
     resolve = None
+    ns_map: dict[str, str] = {}
     if spec is not None:
         try:
-            from yoink.lang.resolve import resolve_import  # late, owned by other agent
+            from yoink.lang.resolve import build_namespace_map, resolve_import
 
             resolve = resolve_import
+            ns_map = build_namespace_map(mods, spec)
         except Exception:
             resolve = None
 
@@ -494,7 +496,7 @@ def _generic_closure(
                 target_resolved = raw
             elif resolve is not None and spec is not None:
                 try:
-                    target_resolved = resolve(mods, spec, mod, raw)
+                    target_resolved = resolve(mods, spec, mod, raw, ns_map)
                 except Exception:
                     target_resolved = None
             if target_resolved:
@@ -545,7 +547,7 @@ def _generic_external(raw: str, source_root: Path, spec: "LangSpec | None") -> E
 
 def _generic_name(raw: str, spec: "LangSpec | None") -> str:
     lang = spec.id if spec is not None else ""
-    s = raw.strip().strip("'\"")
+    s = raw.strip().strip("'\";")
     if lang == "go":
         return s
     if lang == "rust":
@@ -553,6 +555,11 @@ def _generic_name(raw: str, spec: "LangSpec | None") -> str:
     if lang == "jsts" and s.startswith("@"):
         parts = s.split("/")
         return "/".join(parts[:2]) if len(parts) >= 2 else s
+    if lang in ("csharp", "java"):
+        # package names are dotted namespaces — keep the whole thing
+        return s.split("=")[-1].strip()
+    if lang == "php":
+        return s.split("\\")[0] if "\\" in s else s
     for sep in ("/", "\\", ".", "::"):
         if sep in s:
             return s.split(sep)[0]

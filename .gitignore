@@ -1,0 +1,25 @@
+# Proposal docs — kept local, not committed. Remove this line to commit them.
+proposal/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Tool output / scratch
+.yoink-cache/
+out/
+bundles/
+*.zip
+# sd scratch
+.superpowers/

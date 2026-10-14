@@ -20,7 +20,7 @@ def test_e2e_bundle(fixture, tmp_path):
 
 def test_e2e_flat(fixture, tmp_path):
     m = extract(str(fixture("side_effects")), "run", mode="flat", out=tmp_path / "o")
-    assert m.output["files"] and (tmp_path / "o").rglob("*.py")
+    assert m.to_dict()["output"]["files"] and list((tmp_path / "o").rglob("*.py"))
 
 
 def test_e2e_doctor(fixture):
@@ -50,7 +50,7 @@ def test_e2e_zip(fixture, tmp_path):
 
 def test_e2e_license(fixture, tmp_path):
     m = extract(str(fixture("csharp_lib")), "Yoink", out=tmp_path / "o")
-    assert m.source["license"] == "MIT"
+    assert m.to_dict()["source"]["license"] == "MIT"
 
 
 def test_e2e_acquire_missing(tmp_path):

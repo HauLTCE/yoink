@@ -10,7 +10,8 @@ from yoink.lang.resolve import find_symbol_candidates
 
 def _graph(root, lang):
     ig = load_ignore(root)
-    mods = build_generic_module_map(root, ig, get_spec(lang))
+    spec = get_spec(lang)
+    mods = build_generic_module_map(root, spec.extensions, ig)
     return mods, build_graph(root, lang, mods)
 
 
@@ -55,7 +56,7 @@ def test_rust_mod_use(fixture):
 def test_find_symbol_candidates(fixture):
     root = fixture("csharp_lib")
     spec = get_spec("csharp")
-    mods = build_generic_module_map(root, load_ignore(root), spec)
+    mods = build_generic_module_map(root, spec.extensions, load_ignore(root))
     cands = find_symbol_candidates(root, mods, spec, "Yoink")
     assert cands and cands[0][1] >= 60
 

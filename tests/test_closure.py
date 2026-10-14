@@ -26,7 +26,7 @@ def test_type_checking_not_pulled(fixture):
 
 
 def test_conditional_pulled_with_warning(fixture):
-    g, c = _closure(fixture("cond_import"), "go")
+    g, c = _closure(fixture("cond_import"), "target:go")
     assert "fast_impl" in c.modules and "slow_impl" in c.modules
 
 
@@ -36,7 +36,7 @@ def test_cycle_terminates(fixture):
 
 
 def test_depth_hit(fixture):
-    g, c = _closure(fixture("deep_pkg"), "leaf", max_depth=1)
+    g, c = _closure(fixture("deep_pkg"), "top:deep_leaf", max_depth=1)
     assert c.depth_hit
 
 

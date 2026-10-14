@@ -42,7 +42,14 @@ def _module_map(root: Path, language: str) -> dict[str, ModuleInfo]:
     fn = getattr(gbase, "build_generic_module_map", None)
     if fn is None:
         raise YoinkError("graph.base.build_generic_module_map missing")
-    return fn(root, ignored)
+    try:
+        from yoink.lang import get_spec
+
+        spec = get_spec(language)
+        exts = spec.extensions
+    except Exception:
+        exts = (".py",)
+    return fn(root, exts, ignored)
 
 
 def _build_graph(root: Path, language: str, mods: dict[str, ModuleInfo]) -> ModuleGraph:

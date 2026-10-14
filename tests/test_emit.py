@@ -62,7 +62,7 @@ def test_flat_side_effects_wholesale(fixture, tmp_path):
 def test_flat_generic_concat(fixture, tmp_path):
     root = fixture("generic_flat")
     spec = get_spec("csharp")
-    mods = build_generic_module_map(root, load_ignore(root), spec)
+    mods = build_generic_module_map(root, spec.extensions, load_ignore(root))
     g = build_graph(root, "csharp", mods)
     tmod, tsym = resolve_target(mods, g.defns, "Go", "csharp")
     c = compute_closure(g, mods, tmod, tsym, max_depth=12, source_root=root, spec=spec)

@@ -50,7 +50,11 @@ def test_missing_source(run_cli):
     assert r.exit_code != 0
 
 
-def test_cache_commands(run_cli):
-    assert run_cli("cache", "dir").exit_code == 0
-    assert run_cli("cache", "list").exit_code == 0
-    assert run_cli("cache", "clear").exit_code == 0
+def test_cache_commands():
+    from typer.testing import CliRunner
+    from yoink.cli import cache_app
+
+    runner = CliRunner()
+    assert runner.invoke(cache_app, ["dir"]).exit_code == 0
+    assert runner.invoke(cache_app, ["list"]).exit_code == 0
+    assert runner.invoke(cache_app, ["clear"]).exit_code == 0

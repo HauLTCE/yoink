@@ -29,8 +29,11 @@ def cache_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 @pytest.fixture()
 def make_repo(tmp_path: Path):
-    def _make(files: dict[str, str]) -> Path:
-        root = tmp_path / "repo"
+    counter = [0]
+
+    def _make(files: dict[str, str], name: str = "") -> Path:
+        counter[0] += 1
+        root = tmp_path / (name or f"repo{counter[0]}")
         for rel, content in files.items():
             fp = root / rel
             fp.parent.mkdir(parents=True, exist_ok=True)

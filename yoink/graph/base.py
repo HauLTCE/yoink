@@ -15,6 +15,18 @@ from yoink.util import find_source_root
 _PKG_INIT_STEMS = {"__init__", "index", "mod"}
 
 
+def _follow_reexport(
+    defns: dict[str, list], hits: list[str], target: str
+) -> str | None:
+    """Chase a re-export-only hit set to the module that really defines target."""
+    real = [
+        m
+        for m, ds in defns.items()
+        if m not in hits and any(d.name == target and d.kind != "import" for d in ds)
+    ]
+    return real[0] if len(real) == 1 else None
+
+
 def build_generic_module_map(
     root: Path,
     extensions: tuple[str, ...],
@@ -87,10 +99,24 @@ def _resolve_target_python(
     # bare symbol or module
     # spec order: defn names first, then module names
     hits = [m for m, ds in defns.items() if any(d.name == target for d in ds)]
+    if len(hits) > 1:
+        # prefer modules that define it for real over re-export bindings
+        real = [
+            m
+            for m in hits
+            if any(d.name == target and d.kind != "import" for d in defns[m])
+        ]
+        if len(real) == 1:
+            return real[0], target
+        if len(real) > 1:
+            raise SymbolNotFoundError(target, candidates=sorted(real))
+        # all hits are re-export bindings — chase them to the definer
+        resolved = _follow_reexport(defns, hits, target)
+        if resolved:
+            return resolved, target
+        raise SymbolNotFoundError(target, candidates=sorted(hits))
     if len(hits) == 1:
         return hits[0], target
-    if len(hits) > 1:
-        raise SymbolNotFoundError(target, candidates=sorted(hits))
     if target in mods:
         return target, None
     for name in mods:

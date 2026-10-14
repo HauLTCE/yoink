@@ -51,7 +51,7 @@ def compute_closure(
     source_root = Path(source_root)
     if graph.language == "python":
         closure = _python_closure(
-            graph, module_map, target_module, max_depth, source_root
+            graph, module_map, target_module, target_symbol, max_depth, source_root
         )
         closure.resolution = "ast"
     else:
@@ -73,6 +73,7 @@ def _python_closure(
     graph: ModuleGraph,
     mods: dict[str, ModuleInfo],
     target_module: str | None,
+    target_symbol: str | None,
     max_depth: int,
     source_root: Path,
 ) -> Closure:
@@ -91,6 +92,16 @@ def _python_closure(
         return Closure(target="", language="python", resolution="ast")
 
     seeds = [target_module]
+    if target_symbol:
+        # pull the re-export chain: every module that re-exports the symbol back
+        # to its definer rides along (from a import leaf where a re-exports it)
+        for importer, bind in bindings.items():
+            if target_symbol in bind:
+                origin = _follow_binding(importer, target_symbol, bindings, mods)
+                if origin == target_module or _chain_reaches(
+                    importer, target_symbol, bindings, mods, target_module
+                ):
+                    seeds.append(importer)
     seen: set[str] = set()
     queue: deque[tuple[str, int]] = deque((s, 0) for s in seeds)
     depth_hit = False
@@ -186,6 +197,32 @@ def _resolve_in_repo(mod: str, mods: dict[str, ModuleInfo]) -> str | None:
         if cand in mods:
             return cand
     return None
+
+
+def _chain_reaches(
+    importer: str,
+    name: str,
+    bindings: dict[str, dict[str, str]],
+    mods: dict[str, ModuleInfo],
+    goal: str,
+) -> bool:
+    """True when importer's binding for `name` resolves down the chain to `goal`."""
+    cur = importer
+    seen: set[str] = set()
+    for _ in range(64):
+        if cur in seen:
+            return False
+        seen.add(cur)
+        origin = bindings.get(cur, {}).get(name)
+        if origin is None:
+            return cur == goal
+        nxt = _resolve_in_repo(origin, mods)
+        if nxt is None:
+            return False
+        if nxt == goal:
+            return True
+        cur = nxt
+    return False
 
 
 def _follow_binding(

@@ -328,7 +328,9 @@ def extract(
         flat_path = out_dir / fname
         emit_result = _emit_flat(graph, closure, root, flat_path, spec=spec)
 
-    manifest.warnings.extend(emit_result.warnings)
+    for w in emit_result.warnings:
+        if w not in manifest.warnings:
+            manifest.warnings.append(w)
     _fill_output(manifest, emit_result, out_dir)
 
     manifest_path = out_dir / "yoink.manifest.json"

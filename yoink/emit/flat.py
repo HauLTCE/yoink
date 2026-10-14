@@ -301,9 +301,7 @@ def _flat_generic(
     hoisted: list[str] = []
     seen: set[str] = set()
     out: list[str] = []
-    warnings = [
-        f"resolution: text - regex-based graph for {spec.id}, verify imports"
-    ]
+    warnings: list[str] = []
     for mod in order:
         info = graph.modules.get(mod)
         if info is None:

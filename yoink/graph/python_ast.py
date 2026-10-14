@@ -181,14 +181,17 @@ def _catches_import_error(node: ast.Try) -> bool:
 
 
 def _type_check_test(test: ast.expr) -> bool:
+    # only positive TYPE_CHECKING guards, not `if not TYPE_CHECKING`
     if isinstance(test, ast.Name):
         return test.id == "TYPE_CHECKING"
     if isinstance(test, ast.Attribute):
         return test.attr == "TYPE_CHECKING"
     if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Invert):
-        return _type_check_test(test.operand)
+        return False
     if isinstance(test, ast.BoolOp):
-        return any(_type_check_test(v) for v in test.values)
+        return isinstance(test.op, ast.And) and all(
+            _type_check_test(v) for v in test.values
+        )
     return False
 
 

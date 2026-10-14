@@ -79,6 +79,7 @@ def _flat_python(
     seen_imports: set[str] = set()
     sections: list[tuple[str, list[str]]] = []
     emitted: dict[str, str] = {}  # name -> first module that claimed it
+    ns_rewrites: dict[str, str] = {}  # bound-module name -> inlined root
 
     for mod in order:
         tree = trees[mod]
@@ -104,9 +105,20 @@ def _flat_python(
             if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str):
                 continue  # module docstring
             if isinstance(stmt, ast.Import):
-                keep = _filter_import(stmt, closure.modules)
-                if keep is not None:
-                    line = ast.unparse(keep)
+                # drop imports that resolve into the pulled set — but if the
+                # module is still used as `x.attr`, rewrite uses to the inlined
+                # name so the flat file actually runs
+                keep = []
+                for a in stmt.names:
+                    bound = a.asname or a.name.split(".")[0]
+                    resolved = _resolved_in(a.name, closure.modules)
+                    if resolved is None:
+                        keep.append(a)
+                    elif _name_used_as_namespace(tree, bound):
+                        ns_rewrites[bound] = ""
+                if keep:
+                    imp = stmt if len(keep) == len(stmt.names) else ast.Import(names=keep)
+                    line = ast.unparse(imp)
                     if line not in seen_imports:
                         seen_imports.add(line)
                         import_lines.append(line)
@@ -147,6 +159,9 @@ def _flat_python(
             seg = _segment(src_lines, stmt)
             if emit_name != name:
                 seg = _rename_first(seg, name, emit_name)
+            for ns in ns_rewrites:
+                # `ns.attr` -> `attr` now that the module is inlined flat
+                seg = [re.sub(rf"\b{re.escape(ns)}\.", "", ln) for ln in seg]
             section.extend(seg)
         sections.append((mod, section))
 
@@ -166,6 +181,39 @@ def _flat_python(
         first = False
     out_path.write_text("\n".join(out).rstrip() + "\n", encoding="utf-8")
     return EmitResult(files=[out_path], warnings=warnings, output_dir=out_path.parent)
+
+
+_IMPORT_LEAD: dict[str, tuple[str, ...]] = {
+    "csharp": ("using ",),
+    "jsts": ("import ", "export ", "const ", "var ", "let "),
+    "rust": ("use ", "mod ", "extern crate"),
+    "java": ("import ",),
+    "cpp": ("#include", "# include", "#  include"),
+    "ruby": ("require", "require_relative", "load "),
+    "php": ("use ", "require", "include"),
+}
+
+
+def _name_used_as_namespace(tree: ast.Module, name: str) -> bool:
+    """True when `name.attr` attribute access appears anywhere in the module."""
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == name
+        ):
+            return True
+    return False
+
+
+def _is_import_line(stripped: str, spec: "LangSpec") -> bool:
+    """Line is a hoisted import only when it leads with the lang's import form."""
+    lead = _IMPORT_LEAD.get(spec.id)
+    if lead and not stripped.startswith(lead):
+        return False
+    if not stripped:
+        return False
+    return any(re.search(r, stripped) for r in spec.import_re)
 
 
 def _resolve_from(info, stmt: ast.ImportFrom) -> str:
@@ -297,7 +345,6 @@ def _flat_generic(
 ) -> EmitResult:
     order = topo_order(graph, closure.modules)
     sep = spec.flat_sep or "#"
-    import_res = [re.compile(r) for r in spec.import_re]
     hoisted: list[str] = []
     seen: set[str] = set()
     out: list[str] = []
@@ -309,12 +356,33 @@ def _flat_generic(
         text = read_text(info.path)
         body_lines: list[str] = []
         if spec.flat_import_first:
+            in_import_block = False
             for line in text.splitlines():
-                if any(r.search(line) for r in import_res):
-                    s = line.strip()
-                    if s and s not in seen:
-                        seen.add(s)
-                        hoisted.append(s)
+                stripped = line.strip()
+                if spec.id == "go":
+                    # single `import "x"` hoists; `import (...)` block stays inline
+                    if stripped.startswith("import ("):
+                        in_import_block = True
+                        body_lines.append(line)
+                        continue
+                    if in_import_block:
+                        body_lines.append(line)
+                        if stripped == ")":
+                            in_import_block = False
+                        continue
+                    if stripped.startswith('import "') or re.match(
+                        r'^import\s+\w+\s+"', stripped
+                    ):
+                        if stripped not in seen:
+                            seen.add(stripped)
+                            hoisted.append(stripped)
+                        continue
+                    body_lines.append(line)
+                    continue
+                if _is_import_line(stripped, spec):
+                    if stripped not in seen:
+                        seen.add(stripped)
+                        hoisted.append(stripped)
                 else:
                     body_lines.append(line)
         else:

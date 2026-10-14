@@ -14,7 +14,7 @@ from yoink.acquire.cache import cache_root, clear_cache, list_cached
 from yoink.config import load_config
 from yoink.errors import StrictModeError, YoinkError
 from yoink.model import Closure, ExternalDep, Unresolved
-from yoink.report import print_doctor, print_error, print_result
+from yoink.report import closure_to_dict, print_doctor, print_error, print_result
 
 # two typer apps: extract_app is single-command so `yoink <src> --grab x` parses
 # naturally; `yoink cache ...` is dispatched in app() before typer sees argv.
@@ -101,6 +101,11 @@ def _extract(
         chosen_mode = _pick_mode(mode, bundle, flat, doctor)
         cfg = load_config()
 
+        if json_out and chosen_mode == "doctor":
+            closure = api.analyze(src, grab, max_depth=max_depth, config=cfg)
+            print(json.dumps(closure_to_dict(closure), indent=2))
+            raise typer.Exit()
+
         manifest = api.extract(
             src,
             grab,
@@ -119,7 +124,8 @@ def _extract(
         if json_out:
             print(json.dumps(manifest.to_dict(), indent=2))
         elif chosen_mode == "doctor":
-            print_doctor(_manifest_to_closure(manifest, grab), manifest.to_dict())
+            closure = api.analyze(src, grab, max_depth=max_depth, config=cfg)
+            print_doctor(closure, manifest.to_dict())
         else:
             out_path = Path(out) if out else (Path(cfg.out_dir) if cfg.out_dir else None)
             print_result(manifest, out_path)

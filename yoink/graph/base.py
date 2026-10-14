@@ -29,17 +29,22 @@ def _follow_reexport(
 
 def build_generic_module_map(
     root: Path,
-    extensions: tuple[str, ...],
+    extensions: tuple[str, ...] | None,
     ignored: Callable[[Path, bool], bool] | None = None,
 ) -> dict[str, ModuleInfo]:
-    """ModuleInfo for every file matching extensions: name = posix rel path minus ext."""
+    """ModuleInfo for every file matching extensions: name = posix rel path minus ext.
+    extensions=None maps every file (unknown-language repos)."""
     root = Path(root)
     if ignored is None:
         ignored = load_ignore(root)
     source_root = find_source_root(root)
-    exts = tuple(e.lower() for e in extensions)
+    exts = tuple(e.lower() for e in extensions) if extensions is not None else None
     mods: dict[str, ModuleInfo] = {}
-    for f in sorted(p for p in iter_files(source_root, ignored) if p.suffix.lower() in exts):
+    for f in sorted(
+        p
+        for p in iter_files(source_root, ignored)
+        if exts is None or p.suffix.lower() in exts
+    ):
         rel = f.relative_to(source_root)
         name = rel.with_suffix("").as_posix()
         package = rel.parent.as_posix() or None
@@ -58,7 +63,13 @@ def build_graph(
         from yoink.graph.python_ast import build_python_graph
 
         return build_python_graph(root, mods)
-    spec = get_spec(language)
+    try:
+        spec = get_spec(language)
+    except KeyError:
+        spec = None
+    if spec is None:
+        # unknown/mixed repo — empty graph, file-targeted pull still works
+        return ModuleGraph(language=language, modules=mods)
     from yoink.graph.generic import build_generic_graph
 
     return build_generic_graph(Path(root), mods, spec, Path(root))
@@ -153,7 +164,13 @@ def _resolve_target_generic(
     if tgt.rsplit(".", 1)[0] in mods:
         return tgt.rsplit(".", 1)[0], None
     # find_symbol_candidates scoring
-    spec = get_spec(language)
+    try:
+        spec = get_spec(language)
+    except KeyError:
+        spec = None
+    if spec is None:
+        # unknown language: only an exact path hit counts
+        raise SymbolNotFoundError(target)
     if not mods:
         raise SymbolNotFoundError(target)
     root = _mods_root(mods) or Path(".")

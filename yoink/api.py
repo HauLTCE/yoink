@@ -48,7 +48,7 @@ def _module_map(root: Path, language: str) -> dict[str, ModuleInfo]:
         spec = get_spec(language)
         exts = spec.extensions
     except Exception:
-        exts = (".py",)
+        exts = None  # unknown language — every file is mappable
     return fn(root, exts, ignored)
 
 
@@ -128,6 +128,8 @@ def _emit_flat(
     out_path: Path,
     *,
     spec=None,
+    target_module: str | None = None,
+    target_symbol: str | None = None,
 ) -> EmitResult:
     import inspect
 
@@ -136,12 +138,16 @@ def _emit_flat(
     except ImportError:
         from yoink.emit.flat import emit_flat  # type: ignore[no-redef]
     kwargs: dict = {}
-    if spec is not None:
-        try:
-            if "spec" in inspect.signature(emit_flat).parameters:
-                kwargs["spec"] = spec
-        except (TypeError, ValueError):
-            kwargs["spec"] = spec
+    try:
+        params = inspect.signature(emit_flat).parameters
+    except (TypeError, ValueError):
+        params = {"spec": None, "target_module": None, "target_symbol": None}
+    if spec is not None and "spec" in params:
+        kwargs["spec"] = spec
+    if target_module is not None and "target_module" in params:
+        kwargs["target_module"] = target_module
+    if target_symbol is not None and "target_symbol" in params:
+        kwargs["target_symbol"] = target_symbol
     return emit_flat(graph, closure, source_root, out_path, **kwargs)
 
 
@@ -312,6 +318,8 @@ def extract(
             out_dir = Path(out)
             out_dir.mkdir(parents=True, exist_ok=True)
             manifest.write(out_dir / "yoink.manifest.json")
+        if strict and closure.unresolved:
+            raise StrictModeError(f"{len(closure.unresolved)} unresolved refs")
         return manifest
 
     if out is None:
@@ -326,7 +334,10 @@ def extract(
     else:  # flat
         fname = _flat_default_name(target, language, flat_name)
         flat_path = out_dir / fname
-        emit_result = _emit_flat(graph, closure, root, flat_path, spec=spec)
+        emit_result = _emit_flat(
+            graph, closure, root, flat_path,
+            spec=spec, target_module=tmod, target_symbol=tsym,
+        )
 
     for w in emit_result.warnings:
         if w not in manifest.warnings:
@@ -335,13 +346,6 @@ def extract(
 
     manifest_path = out_dir / "yoink.manifest.json"
     manifest.write(manifest_path)
-
-    if zip_out:
-        try:
-            zip_path = _emit_zip(out_dir, None, default_name=f"yoink-bundle-{target.replace(':', '_')}")
-        except Exception as e:
-            raise EmitError(f"zip failed: {e}") from e
-        manifest.warnings.append(f"zip written: {zip_path}")
 
     if test_cmd is not None:
         sandbox = prepare_sandbox(out_dir)
@@ -354,6 +358,14 @@ def extract(
             passed=(True if vres.status == "passed" else (False if vres.status == "failed" else None)),
             detail=vres.detail,
         )
+        manifest.write(manifest_path)
+
+    if zip_out:
+        try:
+            zip_path = _emit_zip(out_dir, None, default_name=f"yoink-bundle-{target.replace(':', '_')}")
+        except Exception as e:
+            raise EmitError(f"zip failed: {e}") from e
+        manifest.warnings.append(f"zip written: {zip_path}")
         manifest.write(manifest_path)
 
     if strict and closure.unresolved:

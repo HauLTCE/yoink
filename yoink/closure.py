@@ -122,8 +122,9 @@ def _python_closure(
                 unresolved, queue, depth, source_root,
             )
 
+    # unbound-name pull can discover more modules — fold into the same BFS
     _pull_symbol_modules(
-        pulled, graph, mods, bindings, stdlib, external, unresolved,
+        pulled, queue, seen, graph, mods, bindings, stdlib, external, unresolved,
         max_depth, source_root,
     )
 
@@ -164,6 +165,11 @@ def _classify_edge(
             queue.append((resolved, depth + 1))
         # from X import name where name lives deeper: pull defining module
         for name, _asname in e.names:
+            # `from . import submod` / `from pkg import name` may name a submodule
+            sub = f"{resolved}.{name}"
+            if sub in mods and sub not in pulled:
+                queue.append((sub, depth + 1))
+                continue
             origin = _follow_binding(resolved, name, bindings, mods)
             if origin and origin != resolved and origin not in pulled:
                 queue.append((origin, depth + 1))
@@ -251,6 +257,8 @@ def _follow_binding(
 
 def _pull_symbol_modules(
     pulled: set[str],
+    queue: deque[tuple[str, int]],
+    seen: set[str],
     graph: ModuleGraph,
     mods: dict[str, ModuleInfo],
     bindings: dict[str, dict[str, str]],
@@ -261,7 +269,7 @@ def _pull_symbol_modules(
     source_root: Path,
 ) -> None:
     # names used-but-unbound in pulled modules might be importable names —
-    # try resolving them against the module map one more hop
+    # enqueue them and run the same BFS so their edges get walked too
     changed = True
     rounds = 0
     while changed and rounds < 4:
@@ -278,8 +286,26 @@ def _pull_symbol_modules(
                     continue
                 names = {n for n, _ in e.names}
                 if sym.name in names or sym.name == e.module.split(".")[-1]:
-                    pulled.add(resolved)
+                    queue.append((resolved, 0))
                     changed = True
+    by_importer: dict[str, list[ImportEdge]] = defaultdict(list)
+    for e in graph.imports:
+        by_importer[e.importer].append(e)
+    while queue:
+        mod, depth = queue.popleft()
+        if mod in seen:
+            continue
+        seen.add(mod)
+        pulled.add(mod)
+        if depth >= max_depth:
+            continue
+        for e in by_importer.get(mod, []):
+            if e.kind == "type_checking":
+                continue
+            _classify_edge(
+                e, mod, mods, graph, bindings, pulled, stdlib, external,
+                unresolved, queue, depth, source_root,
+            )
 
 
 def _symbol_unresolved(

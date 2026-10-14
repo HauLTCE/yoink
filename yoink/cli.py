@@ -104,6 +104,8 @@ def _extract(
         if json_out and chosen_mode == "doctor":
             closure = api.analyze(src, grab, max_depth=max_depth, config=cfg)
             print(json.dumps(closure_to_dict(closure), indent=2))
+            if strict and closure.unresolved:
+                raise StrictModeError(f"{len(closure.unresolved)} unresolved refs")
             raise typer.Exit()
 
         manifest = api.extract(

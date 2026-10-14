@@ -160,8 +160,9 @@ def _flat_python(
             if emit_name != name:
                 seg = _rename_first(seg, name, emit_name)
             for ns in ns_rewrites:
-                # `ns.attr` -> `attr` now that the module is inlined flat
-                seg = [re.sub(rf"\b{re.escape(ns)}\.", "", ln) for ln in seg]
+                # `ns.attr` -> `attr` now that the module is inlined flat;
+                # skip inside string literals
+                seg = [_rewrite_ns(ln, ns) for ln in seg]
             section.extend(seg)
         sections.append((mod, section))
 
@@ -192,6 +193,32 @@ _IMPORT_LEAD: dict[str, tuple[str, ...]] = {
     "ruby": ("require", "require_relative", "load "),
     "php": ("use ", "require", "include"),
 }
+
+
+def _rewrite_ns(line: str, ns: str) -> str:
+    """Rewrite `ns.` -> '' outside string literals on one line."""
+    pat = re.compile(rf"\b{re.escape(ns)}\.")
+    out: list[str] = []
+    i = 0
+    in_str: str | None = None
+    while i < len(line):
+        ch = line[i]
+        if in_str is None:
+            if ch in ('"', "'"):
+                in_str = ch
+            else:
+                m = pat.match(line, i)
+                if m:
+                    i = m.end()
+                    continue
+                if ch == "#":
+                    break
+        else:
+            if ch == in_str and line[i - 1] != "\\":
+                in_str = None
+        out.append(ch)
+        i += 1
+    return "".join(out)
 
 
 def _name_used_as_namespace(tree: ast.Module, name: str) -> bool:

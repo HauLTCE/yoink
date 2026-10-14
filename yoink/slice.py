@@ -36,11 +36,21 @@ def needed_defns(
     for e in graph.imports:
         if e.importer not in closure.modules:
             continue
+        # `import x` / `import x as y` binds the module object itself — the
+        # recorded name equals e.module's last segment, so `x.<member>` reaches
+        # every defn. from-imports name real members and fall through below.
+        edge_target = e.module
         for n, _a in e.names:
             if n in names_of and (
                 e.module == module or bindings.get(e.importer, {}).get(n) == module
             ):
                 out.add(n)
+            elif (n == edge_target or n == edge_target.split(".")[-1]) and (
+                edge_target == module
+                or edge_target.endswith("." + module)
+                or module.endswith("." + edge_target)
+            ):
+                out.update(names_of)
     for sym in graph.symbols:
         if sym.module in closure.modules and sym.module != module and sym.name in names_of:
             out.add(sym.name)

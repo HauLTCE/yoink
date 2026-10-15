@@ -1,29 +1,18 @@
-# Proposal docs — kept local, not committed. Remove this line to commit them.
-proposal/
+# Ship only what's needed to run: the package, packaging config, license, readme.
+# Everything else (tests/, docs/, proposal/, caches, scratch) stays local.
 
-# Python
+# Ignore everything
+*
+
+# Re-include the essentials
+!.gitignore
+!LICENSE
+!README.md
+!pyproject.toml
+!yoink/
+!yoink/**
+
+# But never generated Python files inside the package
 __pycache__/
 *.py[cod]
 *.egg-info/
-.venv/
-venv/
-env/
-dist/
-build/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-htmlcov/
-
-# Tool output / scratch
-.yoink-cache/
-out/
-bundles/
-*.zip
-# sd scratch
-.superpowers/
-
-# .NET build output (fixture repos)
-**/obj/
-**/bin/

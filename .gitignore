@@ -23,3 +23,7 @@ bundles/
 *.zip
 # sd scratch
 .superpowers/
+
+# .NET build output (fixture repos)
+**/obj/
+**/bin/

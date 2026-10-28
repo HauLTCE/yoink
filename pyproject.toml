@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yoink"
+version = "2.0.0"
+description = "Surgical feature extractor: pull a symbol plus its dependency closure out of a repo across 15+ languages."
+requires-python = ">=3.11"
+license = {text = "GPL-3.0-only"}
+dependencies = [
+    "typer>=0.12",
+    "rich>=13",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+yoink = "yoink.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.setuptools.packages.find]
+include = ["yoink*"]
